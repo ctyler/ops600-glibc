@@ -28,7 +28,7 @@ memset (void *dstpp, int c, size_t len)
 
   if (len >= 8)
     {
-      #ifdef __AARCH64__
+      #ifdef ARM64
       #else
       size_t xlen;
       op_t cccc;
@@ -52,7 +52,7 @@ memset (void *dstpp, int c, size_t len)
       /* Write 8 `op_t' per iteration until less than 8 `op_t' remain.  */
       xlen = len / (OPSIZ * 8);
 
-#ifdef __AARCH64__
+#ifdef ARM64
       __asm__ ("DUP v0.2d, %0;  \
 					MOV v1.16b, v0.16b; \
 					MOV v2.16b, v0.16b; \
