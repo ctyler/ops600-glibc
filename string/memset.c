@@ -28,6 +28,8 @@ memset (void *dstpp, int c, size_t len)
 
   if (len >= 8)
     {
+      #ifdef ARM64
+      #else
       size_t xlen;
       op_t cccc;
 
@@ -37,7 +39,7 @@ memset (void *dstpp, int c, size_t len)
       if (OPSIZ > 4)
 	/* Do the shift in two steps to avoid warning if long has 32 bits.  */
 	cccc |= (cccc << 16) << 16;
-
+      #endif
       /* There are at least some bytes to set.
 	 No need to test for LEN == 0 in this alignment loop.  */
       while (dstp % OPSIZ != 0)
@@ -49,19 +51,40 @@ memset (void *dstpp, int c, size_t len)
 
       /* Write 8 `op_t' per iteration until less than 8 `op_t' remain.  */
       xlen = len / (OPSIZ * 8);
-      while (xlen > 0)
-	{
-	  ((op_t *) dstp)[0] = cccc;
-	  ((op_t *) dstp)[1] = cccc;
-	  ((op_t *) dstp)[2] = cccc;
-	  ((op_t *) dstp)[3] = cccc;
-	  ((op_t *) dstp)[4] = cccc;
-	  ((op_t *) dstp)[5] = cccc;
-	  ((op_t *) dstp)[6] = cccc;
-	  ((op_t *) dstp)[7] = cccc;
-	  dstp += 8 * OPSIZ;
-	  xlen -= 1;
-	}
+
+#ifdef ARM64
+      __asm__ ("DUP v0.2d, %0;  \
+					MOV v1.16b, v0.16b; \
+					MOV v2.16b, v0.16b; \
+					MOV v3.16b, v0.16b"
+					 : /*no output*/
+					 : "r"(cccc) /*register holding pointer (refer as %0), then volint register (refer as %1)*/
+					 :
+			 );
+
+      __asm__ ("LOOP: \
+            ST1 {v0.2d, v1.2d, v2.2d, v3.2d}, [%0], #64; \
+            CMP %0, %1; \
+            B.NE LOOP" /*can use ",#64" instead of incrementing*/
+           : /*no output*/
+           : "r"(dstp), "r"(dstp + (len & ~0b11111)) /*register holding pointer (refer as %0), then volint register (refer as %1)*/
+           :
+       );
+#else
+       while (xlen > 0)
+     {
+     ((op_t *) dstp)[0] = cccc;
+     ((op_t *) dstp)[1] = cccc;
+     ((op_t *) dstp)[2] = cccc;
+     ((op_t *) dstp)[3] = cccc;
+     ((op_t *) dstp)[4] = cccc;
+     ((op_t *) dstp)[5] = cccc;
+     ((op_t *) dstp)[6] = cccc;
+     ((op_t *) dstp)[7] = cccc;
+     dstp += 8 * OPSIZ;
+     xlen -= 1;
+     }
+#endif
       len %= OPSIZ * 8;
 
       /* Write 1 `op_t' per iteration until less than OPSIZ bytes remain.  */
