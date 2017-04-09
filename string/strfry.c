@@ -35,13 +35,12 @@ strfry (char *string)
       init = 1;
     }
 
-  size_t len = strlen (string);
-  if (len > 0)
-    for (size_t i = 0; i < len - 1; ++i)
+  if (string[0])
+    for (size_t i = 1; string[i]; ++i)
       {
 	int32_t j;
 	__random_r (&rdata, &j);
-	j = j % (len - i) + i;
+	j = j % i;
 
 	char c = string[i];
 	string[i] = string[j];
