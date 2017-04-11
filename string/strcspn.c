@@ -27,8 +27,7 @@
 
 /* Return the length of the maximum initial segment of S
    which contains no characters from REJECT.  */
-size_t
-STRCSPN (const char *str, const char *reject)
+size_t STRCSPN (const char *str, const char *reject)
 {
   if (__glibc_unlikely (reject[0] == '\0') ||
       __glibc_unlikely (reject[1] == '\0'))
@@ -36,37 +35,57 @@ STRCSPN (const char *str, const char *reject)
 
   /* Use multiple small memsets to enable inlining on most targets.  */
   unsigned char table[256];
-  unsigned char *p = memset (table, 0, 64);
-  memset (p + 64, 0, 64);
-  memset (p + 128, 0, 64);
-  memset (p + 192, 0, 64);
+  unsigned char *p = memset(table, 0, 64);
+  memset(p + 64, 0, 64);
+  memset(p + 128, 0, 64);
+  memset(p + 192, 0, 64);
 
-  unsigned char *s = (unsigned char*) reject;
+  unsigned char *s = (unsigned char*)reject;
   unsigned char tmp;
   do
     p[tmp = *s++] = 1;
   while (tmp);
 
-  s = (unsigned char*) str;
+  s = (unsigned char*)str;
   if (p[s[0]]) return 0;
   if (p[s[1]]) return 1;
   if (p[s[2]]) return 2;
   if (p[s[3]]) return 3;
+  if (p[s[4]]) return 4;
+  if (p[s[5]]) return 5;
+  if (p[s[6]]) return 6;
+  if (p[s[7]]) return 7;
 
-  s = (unsigned char *) PTR_ALIGN_DOWN (s, 4);
 
-  unsigned int c0, c1, c2, c3;
+
+  unsigned int c0, c1, c2, c3, c4, c5, c6, c7;
   do
-    {
-      s += 4;
-      c0 = p[s[0]];
-      c1 = p[s[1]];
-      c2 = p[s[2]];
-      c3 = p[s[3]];
-    }
-  while ((c0 | c1 | c2 | c3) == 0);
+  {
+    s += 8;
+    c0 = p[s[0]];
+    c1 = p[s[1]];
+    c2 = p[s[2]];
+    c3 = p[s[3]];
+    c4 = p[s[4]];
+    c5 = p[s[5]];
+    c6 = p[s[6]];
+    c7 = p[s[7]];
+  } while ((c0 | c1 | c2 | c3 | c4 | c5 | c6 | c7) == 0);
 
-  size_t count = s - (unsigned char *) str;
-  return (c0 | c1) != 0 ? count - c0 + 1 : count - c2 + 3;
+  size_t count = s - (unsigned char *)str;
+
+  if (c0 | c1 != 0) {
+    return count - c0 + 1;
+  }
+  else if ((c2 | c3) != 0) {
+    return count - c2 + 3;
+  }
+  else if ((c4 | c5) != 0) {
+    return count - c4 + 5;
+  }
+  else {
+    return count - c6 + 5;
+  }
+
 }
 libc_hidden_builtin_def (strcspn)
