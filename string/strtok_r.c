@@ -42,7 +42,9 @@ char *
 __strtok_r (char *s, const char *delim, char **save_ptr)
 {
   char *end;
-
+  char *buf;
+  size_t len = strlen(s);
+  int n;
   if (s == NULL)
     s = *save_ptr;
 
@@ -54,24 +56,18 @@ __strtok_r (char *s, const char *delim, char **save_ptr)
 
   /* Scan leading delimiters.  */
   s += strspn (s, delim);
-  if (*s == '\0')
-    {
-      *save_ptr = s;
-      return NULL;
-    }
-
   /* Find the end of the token.  */
   end = s + strcspn (s, delim);
-  if (*end == '\0')
-    {
-      *save_ptr = end;
-      return s;
-    }
-
+  n = strcspn(s,delim);
+  if (len-1 < n)              /* the complement (c) of *delim */
+        n = len-1;
+    memcpy(buf, s, n);
+    buf[n] = 0;
+    s += n;
   /* Terminate the token and make *SAVE_PTR point past it.  */
   *end = '\0';
   *save_ptr = end + 1;
-  return s;
+  return (*s == 0) ? NULL : s;
 }
 #ifdef weak_alias
 libc_hidden_def (__strtok_r)
