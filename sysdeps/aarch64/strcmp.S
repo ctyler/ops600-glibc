@@ -27,131 +27,108 @@
 #define REP8_7f 0x7f7f7f7f7f7f7f7f
 #define REP8_80 0x8080808080808080
 
+/*
+Comment Added by shiv
+r0 through r30 - to refer generally to the registers
+x0 through x30 - for 64-bit-wide access (same registers)
+w0 through w30 - for 32-bit-wide access (same registers - upper 32 bits are either cleared on load or sign-extended (set to the value of the most significant bit of the loaded value)).
+Total number of register used for this function
+
+11 General Purpose 64bit register
+2 General Purpose 32bit register w2,w3.
+*/
 /* Parameters and result.  */
-#define src1		x0
-#define src2		x1
-#define result		x0
+#define src1            x0                              //paramter
+#define src2            x1
+#define result          x0
+
 
 /* Internal variables.  */
-#define data1		x2
-#define data1w		w2
-#define data2		x3
-#define data2w		w3
-#define has_nul		x4
-#define diff		x5
-#define syndrome	x6
-#define tmp1		x7
-#define tmp2		x8
-#define tmp3		x9
-#define zeroones	x10
-#define pos		x11
+#define data1           x2
+#define data1w          w2
+#define data2           x3
+#define data2w          w3
+#define data1v          v0
+#define data2v          v1
 
-	/* Start of performance-critical section  -- one 64B cache line.  */
+#define has_nul         x4
+#define diff            x5
+#define syndrome        x6
+#define tmp1            x7
+#define tmp2            x8
+#define counter         x9
+#define selection       x10
+#define tmp_v           v3
+#define tmp1_v          v4
+#define tmp2_v          v5
+#define tmp3_v          v6
+
+        /* Start of performance-critical section  -- one 64B cache line.  */
 ENTRY_ALIGN(strcmp, 6)
 
-	DELOUSE (0)
-	DELOUSE (1)
-	eor	tmp1, src1, src2
-	mov	zeroones, #REP8_01
-	tst	tmp1, #7
-	b.ne	L(misaligned8)
-	ands	tmp1, src1, #7
-	b.ne	L(mutual_align)
-	/* NUL detection works on the principle that (X - 1) & (~X) & 0x80
-	   (=> (X - 1) & ~(X | 0x7f)) is non-zero iff a byte is zero, and
-	   can be done in parallel across the entire word.  */
-L(loop_aligned):
-	ldr	data1, [src1], #8
-	ldr	data2, [src2], #8
-L(start_realigned):
-	sub	tmp1, data1, zeroones
-	orr	tmp2, data1, #REP8_7f
-	eor	diff, data1, data2	/* Non-zero if differences found.  */
-	bic	has_nul, tmp1, tmp2	/* Non-zero if NUL terminator.  */
-	orr	syndrome, diff, has_nul
-	cbz	syndrome, L(loop_aligned)
-	/* End of performance-critical section  -- one 64B cache line.  */
+                                DELOUSE (0)
+                                DELOUSE (1)
+                                mov     selection,#0
+                                eor     tmp1, src1, src2        /*Appling Or operator to src1 and src2 and saving output in tmp1(x7 register)*/
+                                tst     tmp1, #15
+                                b.ne    L(misaligned15) /*      if two strings are misaligned then go byte by byte method*/
+                                /*ands    tmp1, src1, #15*/
+								/*b.ne    L(mutual_align)*/
 
-#ifndef	__AARCH64EB__
-	rev	syndrome, syndrome
-	rev	data1, data1
-	/* The MS-non-zero bit of the syndrome marks either the first bit
-	   that is different, or the top bit of the first zero byte.
-	   Shifting left now will bring the critical information into the
-	   top bits.  */
-	clz	pos, syndrome
-	rev	data2, data2
-	lsl	data1, data1, pos
-	lsl	data2, data2, pos
-	/* But we need to zero-extend (char is unsigned) the value and then
-	   perform a signed 32-bit subtraction.  */
-	lsr	data1, data1, #56
-	sub	result, data1, data2, lsr #56
-	RET
-#else
-	/* For big-endian we cannot use the trick with the syndrome value
-	   as carry-propagation can corrupt the upper bits if the trailing
-	   bytes in the string contain 0x01.  */
-	/* However, if there is no NUL byte in the dword, we can generate
-	   the result directly.  We can't just subtract the bytes as the
-	   MSB might be significant.  */
-	cbnz	has_nul, 1f
-	cmp	data1, data2
-	cset	result, ne
-	cneg	result, result, lo
-	RET
-1:
-	/* Re-compute the NUL-byte detection, using a byte-reversed value.  */
-	rev	tmp3, data1
-	sub	tmp1, tmp3, zeroones
-	orr	tmp2, tmp3, #REP8_7f
-	bic	has_nul, tmp1, tmp2
-	rev	has_nul, has_nul
-	orr	syndrome, diff, has_nul
-	clz	pos, syndrome
-	/* The MS-non-zero bit of the syndrome marks either the first bit
-	   that is different, or the top bit of the first zero byte.
-	   Shifting left now will bring the critical information into the
-	   top bits.  */
-	lsl	data1, data1, pos
-	lsl	data2, data2, pos
-	/* But we need to zero-extend (char is unsigned) the value and then
-	   perform a signed 32-bit subtraction.  */
-	lsr	data1, data1, #56
-	sub	result, data1, data2, lsr #56
-	RET
-#endif
+L(loop_aligned):
+                                LD1 {v0.16B}, [src1] ,#16
+                                LD1 {v1.16B}, [src2] ,#16
+                                /*Lets try initialiliziung registers*/
+L(start_realigned):
+                                cmeq    v4.16B,v0.16B,v1.16B    /*if any of these are*/
+                                uminv   b3, v0.16B                      /*finds the lowet unsinged interger*/
+                                uminv   b5,v4.16B               /*      if minimum is 0 then found difference else both vectors are same*/
+                                umov    w4,v3.16B[0]            /*Loading LSB 64bit of Vector to general */
+                                umov    w5,v5.16B[0]
+                                cbz     has_nul,L(16_byte_backwords)         /* Lowet Unsigned Integer is zero=nul*/
+                                cbnz    diff,L(loop_aligned)    /*  Branch to Lable on non-zero*/
+                                b       L(16_byte_backwords)
+
+
 
 L(mutual_align):
-	/* Sources are mutually aligned, but are not currently at an
-	   alignment boundary.  Round down the addresses and then mask off
-	   the bytes that preceed the start point.  */
-	bic	src1, src1, #7
-	bic	src2, src2, #7
-	lsl	tmp1, tmp1, #3		/* Bytes beyond alignment -> bits.  */
-	ldr	data1, [src1], #8
-	neg	tmp1, tmp1		/* Bits to alignment -64.  */
-	ldr	data2, [src2], #8
-	mov	tmp2, #~0
+        /* Sources are mutually aligned, but are not currently at an
+           alignment boundary.  Round down the addresses and then mask off
+           the bytes that preceed the start point.  */
+		ins 	v3.D[0],tmp1
+        bic     src1, src1, #15
+        bic     src2, src2, #15
+        lsl     tmp1, tmp1, #4          /* 16 Bytes beyond alignment -> bits.  */
+		ld1 	{v0.16B}, [src1] ,#16
+        neg  	v3.16B, V3.16B             /* Bits to alignment.  */
+		ld1 	{v1.16B}, [src2] ,#16
+        mov     tmp2, #~0
+		dup 	V4.2D,tmp2
 #ifdef __AARCH64EB__
-	/* Big-endian.  Early bytes are at MSB.  */
-	lsl	tmp2, tmp2, tmp1	/* Shift (tmp1 & 63).  */
+        /* Big-endian.  Early bytes are at MSB.  */
+		ushl 	D4,D4,D3
 #else
-	/* Little-endian.  Early bytes are at LSB.  */
-	lsr	tmp2, tmp2, tmp1	/* Shift (tmp1 & 63).  */
+        /* Little-endian.  Early bytes are at LSB.  */
+		rev64 	v4.16B,v4.16B
+        ushl 	D4,D4,D3
+		rev64	v4.16B,v4.16B
 #endif
-	orr	data1, data1, tmp2
-	orr	data2, data2, tmp2
-	b	L(start_realigned)
+		orr  	V1.16B, V1.16B,v4.16B
+        orr		v2.16B,v2.16B,v4.16B
+        b       L(start_realigned)
 
-L(misaligned8):
-	/* We can do better than this.  */
-	ldrb	data1w, [src1], #1
-	ldrb	data2w, [src2], #1
-	cmp	data1w, #1
-	ccmp	data1w, data2w, #0, cs	/* NZCV = 0b0000.  */
-	b.eq	L(misaligned8)
-	sub	result, data1, data2
-	RET
+L(16_byte_backwords):
+		sub     src1 , src1 ,#16
+		sub     src2 ,  src2,#16
+
+L(misaligned15):
+/*need to find from where it is alligned and have it jump to vector methode*/
+        ldrb    data1w, [src1], #1 //8 bits
+        ldrb    data2w, [src2], #1      //8 bits
+        cmp     data1w, #1
+        ccmp    data1w, data2w, #0, cs  /* NZCV = 0b0000.  */
+        b.eq    L(misaligned15) /*branch to label if equal*/
+        sub     result, data1, data2// simply subtract , result = data1 -data2
+        ret                                             //retun of  function
 END(strcmp)
 libc_hidden_builtin_def (strcmp)
