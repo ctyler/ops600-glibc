@@ -18,10 +18,12 @@
 
 
 #include <wchar.h>
-#include <sysdeps.h>
+#include <sysdep.h>
 
-int wcscmp_new(const wchar_t *src1, const wchar_t *src2)
+int 
+__wcscmp(const wchar_t *src1, const wchar_t *src2)
 {
+
     asm goto(
         "loadCharacters:\n"
         "ld1 {v0.4s}, [%0], #16\n" //Load 4 characters into vector register from src1
@@ -74,3 +76,5 @@ returnLessThan:
 returnGreaterThan:
     return 1;
 }
+libc_hidden_builtin_def(__wcscmp)
+weak_alias(__wcscmp,wcscmp)
