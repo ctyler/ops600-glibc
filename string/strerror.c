@@ -25,19 +25,16 @@
    Writing to the storage causes undefined behavior.  */
 libc_freeres_ptr (static char *buf);
 
-char *
-strerror (int errnum)
+char * strerr(int err)
 {
-  char *ret = __strerror_r (errnum, NULL, 0);
-  int saved_errno;
 
-  if (__glibc_likely (ret != NULL))
-    return ret;
-  saved_errno = errno;
-  if (buf == NULL)
-    buf = malloc (1024);
-  __set_errno (saved_errno);
-  if (buf == NULL)
-    return _("Unknown error");
-  return __strerror_r (errnum, buf, 1024);
+      static char buf[1024];
+            if(err>0){
+                     (void)strerror_r(err,buf,sizeof(buf));
+            }
+            else{
+                 return("Unknown error");
+               }
+            return (buf);
+
 }
