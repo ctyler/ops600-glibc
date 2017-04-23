@@ -30,6 +30,15 @@
 char *
 strtok (char *s, const char *delim)
 {
-  static char *olds;
-  return __strtok_r (s, delim, &olds);
+  char *buf;
+  size_t len = strlen(s);
+  int n;
+  s += strspn(s, delim);
+  int n = strcspn(s, delim);  /* count the span (spn) of bytes in the complement (c) of *delim */
+  if (len-1 < n)
+        n = len-1;
+    memcpy(buf, s, n);
+    buf[n] = 0;
+    s += n;
+    return (*s == 0) ? NULL : s;
 }
